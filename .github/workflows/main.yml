@@ -1,0 +1,42 @@
+name: Update Velog Posts
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    # 한국 시간 기준 매일 오전 9시에 실행 (UTC 0시)
+    - cron: '0 0 * * *'
+  workflow_dispatch: # 수동 실행을 위한 트리거 추가
+
+jobs:
+  update_blog:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.x'
+
+    - name: Install dependencies
+      run: pip install feedparser
+
+    - name: Run script to update blog posts
+      run: python scripts/update_blog.py
+
+    - name: Push changes
+      run: |
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+        git add .
+        # 변경 사항이 있을 때만 커밋하도록 수정
+        if ! git diff --staged --quiet; then
+          git commit -m "📚 Velog posts updated by GitHub Actions"
+          git push https://${{ secrets.GH_PAT }}@github.com/mygithub05253/velog-backup.git
+        else
+          echo "No changes to commit"
+        fi
