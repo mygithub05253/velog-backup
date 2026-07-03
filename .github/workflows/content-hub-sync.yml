@@ -42,13 +42,15 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -B auto-sync/velog-backup
+          # 주의: content-hub의 velog-publish가 'auto-sync' 브랜치를 쓰므로
+          # 'auto-sync/velog-backup' 계층 이름은 ref 충돌로 생성 불가 → 평면 이름 사용
+          git checkout -B auto-sync-velog-backup
           git add posts/
           git commit -m "chore(auto-sync): velog 직접 작성 글 역방향 수집 (${{ steps.sync.outputs.created }}건)"
-          git push -f origin auto-sync/velog-backup
-          existing=$(gh pr list --head auto-sync/velog-backup --base main --state open --json number --jq length)
+          git push -f origin auto-sync-velog-backup
+          existing=$(gh pr list --head auto-sync-velog-backup --base main --state open --json number --jq length)
           if [ "$existing" = "0" ]; then
-            gh pr create --head auto-sync/velog-backup --base main \
+            gh pr create --head auto-sync-velog-backup --base main \
               --title "chore(auto-sync): velog 역방향 백업 수집" \
               --body "velog-backup 주간 동기화 — content-hub에 없는 velog 글 ${{ steps.sync.outputs.created }}건 수집. 병합 시 SSOT 일원화."
           fi
