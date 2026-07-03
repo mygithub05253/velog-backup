@@ -1,0 +1,60 @@
+# velog → content-hub 역방향 동기화 (설계서 3.2)
+# 주간 cron: content-hub에 없는 velog 글을 감지해 content-hub로 자동 PR
+name: content-hub-sync
+
+on:
+  schedule:
+    # 매주 월요일 09:00 KST (UTC 00:00)
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: mygithub05253/content-hub
+          token: ${{ secrets.CONTENT_HUB_TOKEN }}
+          path: content-hub
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 의존성 설치
+        run: pip install requests python-frontmatter
+
+      - name: 미보유 글 감지·생성
+        id: sync
+        run: python scripts/sync_to_content_hub.py --content-hub content-hub
+
+      - name: content-hub로 PR 생성 (auto-sync 브랜치 규칙)
+        if: steps.sync.outputs.created != '0'
+        working-directory: content-hub
+        env:
+          GH_TOKEN: ${{ secrets.CONTENT_HUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B auto-sync/velog-backup
+          git add posts/
+          git commit -m "chore(auto-sync): velog 직접 작성 글 역방향 수집 (${{ steps.sync.outputs.created }}건)"
+          git push -f origin auto-sync/velog-backup
+          existing=$(gh pr list --head auto-sync/velog-backup --base main --state open --json number --jq length)
+          if [ "$existing" = "0" ]; then
+            gh pr create --head auto-sync/velog-backup --base main \
+              --title "chore(auto-sync): velog 역방향 백업 수집" \
+              --body "velog-backup 주간 동기화 — content-hub에 없는 velog 글 ${{ steps.sync.outputs.created }}건 수집. 병합 시 SSOT 일원화."
+          fi
+
+      - name: 스텝 서머리
+        if: always()
+        run: |
+          echo "## velog → content-hub 동기화" >> "$GITHUB_STEP_SUMMARY"
+          echo "- 신규 수집: ${{ steps.sync.outputs.created || 0 }}건" >> "$GITHUB_STEP_SUMMARY"
